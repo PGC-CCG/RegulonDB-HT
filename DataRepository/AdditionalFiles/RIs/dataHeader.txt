@@ -1,0 +1,28 @@
+# 
+# ## Query file name:  
+# [Query file name].sql  
+# 
+# ## RegulonDB version:  
+# RegulonDB vX.X.X	 ECOCYC: vX.X (optional)
+# 
+# ## File creation date:  
+# [YYYY-MM-DD]
+# 
+# ## Dataset description:
+# [Description details]
+#
+# ## Columns description:  
+# - [ColumnName:] [description]
+# - [ColumnName:] [description]
+# - [ColumnName:] [description]
+# - [ColumnName:] [description]
+#
+# ## Data file summary:  
+# [File lines: #]
+# [Object: #]
+# [Object: #]
+# 
+# ## Comments:(optional)
+# [Details to consider about the data]
+# 
+# 

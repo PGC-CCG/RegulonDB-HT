@@ -1,0 +1,118 @@
+-- RegulonDB Dataset for RIs [ tf-promoter, tf-tu, tf-gene ]
+SELECT DISTINCT  
+    'ri-tf-promoter'             AS ri_type,
+    ri.regulatory_interaction_id AS RIID,
+    tf.transcription_factor_name AS TFName,
+    cf.final_state               AS ConformationName,
+    p.promoter_id                AS TargetID, 
+    p.promoter_name              AS TargetName,
+    'promoter'                   AS TargetType,
+    ri.ri_function               AS Funtion, 
+    LibraryUtilities.get_all_data_evidence_list(ri.regulatory_interaction_id) AS RIEvidences, 
+    ri.site_id                   AS SiteID,
+    LibraryUtilities.get_ecocyc_id(ri.site_id)  AS EcocycSiteID,
+    ri.center_position           AS RelativeDistanceSiteToPm,    -- distancia relativa del sitio al promotor
+    s.site_absolute_center_position AS SiteAbsCenterPosition,
+    LibraryUtilities.get_all_data_evidence_list(ri.site_id) AS SiteEvidences,
+    ri.ri_dist_first_gene        AS DistanceRItoFirstGene,  -- hay que ser mas especifico, posicion central del sitio
+    p.pos_1                      AS TSS, 
+    p.promoter_strand            AS Strand,
+    g.gene_posleft               AS GenePosLeft,
+    g.gene_posright              AS GenePosRight,
+    null                         AS DistanceSiteToPm  --- relative_dist_to_promoter, porque son NULL ? el center position es la distancia al TSS
+    null                         AS DistSiteToGene    --- relative_dist_to_gene,
+    LibraryUtilities.get_first_gene_name_tu(tu.transcription_unit_id)     AS TUFirstGeneName,
+    LibraryUtilities.Get_Syns_In_One_Row(LibraryUtilities.get_first_gene_tu(tu.transcription_unit_id), ', ')  AS TUFirstGeneSynonyms,
+    LibraryUtilities.Get_Syns_In_One_Row(tf.transcription_factor_id, ', ')   AS  TFSynonyms,
+    LibraryUtilities.Get_Syns_In_One_Row(cf.conformation_id, ' | ')          AS  TFConformationSynonyms,
+    LibraryUtilities.get_all_data_evidence_list(tf.transcription_factor_id)  AS  TFEvidences,
+    LibraryUtilities.get_all_data_evidence_list(cf.conformation_id)          AS  TFConformationEvidences,
+FROM  transcription_factor tf, 
+      conformation cf, 
+      regulatory_interaction ri, 
+      site s
+      promoter p, 
+      transcription_unit tu, 
+      gene g
+WHERE ri.conformation_id = con.conformation_id
+      and con.transcription_factor_id = tf.transcription_factor_id
+      and ri.promoter_id = p.promoter_id
+      and p.promoter_id = tu.promoter_id
+      and ri.ri_first_gene_id = g.GENE_ID (+)
+      and ri.site_id = s.site_id
+
+
+
+union
+
+select distinct  'ri-tf-gene' as ri_type,
+    tfg.regulatory_interaction_id,
+    tf.TRANSCRIPTION_FACTOR_NAME as TRANSCRIPTION_FACTOR_NAME,
+    con.FINAL_STATE as conformation_name,
+    g.gene_id  as target_id, 
+    g.gene_name  as target_name,
+    'gene' as target_type,
+    tfg.RI_FUNCTION,
+    LibraryUtilities.get_all_data_evidence_list(tfg.regulatory_interaction_id) as ri_evidences, 
+    tfg.SITE_ID,LibraryUtilities.get_ecocyc_id(tfg.site_id) as site_id_ecocyc,
+    tfg.CENTER_POSITION,
+    s.site_absolute_center_position,
+    LibraryUtilities.get_all_data_evidence_list(tfg.site_id) as site_evidences,
+    tfg.RI_DIST_FIRST_GENE,
+    null as POS_1,
+    g.GENE_STRAND,
+    g.GENE_POSLEFT,
+    g.GENE_POSRIGHT,
+    null as relative_dist_to_promoter,
+    null as relative_dist_to_gene,
+    g.gene_name  as object_name,
+    LibraryUtilities.Get_Syns_In_One_Row(g.gene_id, ', ') as gene_synonyms_list,
+    LibraryUtilities.Get_Syns_In_One_Row(tf.TRANSCRIPTION_FACTOR_id, ', ') as tf_synonyms_list,
+    LibraryUtilities.Get_Syns_In_One_Row(con.conformation_id, ' | ') as conformation_synonyms_list,
+    LibraryUtilities.get_all_data_evidence_list(tf.TRANSCRIPTION_FACTOR_id) as tf_evidences,
+    LibraryUtilities.get_all_data_evidence_list(con.conformation_id) as conformation_evidences
+from   TF_GENE_INTERACTION tfg,  gene g, conformation con, transcription_factor tf, site s
+where tfg.CONFORMATION_ID = con.CONFORMATION_ID
+and con.TRANSCRIPTION_FACTOR_ID = tf.TRANSCRIPTION_FACTOR_ID
+and tfg.object_id = g.gene_id
+and tfg.site_id = s.site_id
+
+
+
+union
+
+select distinct  'ri-tf-tu' as ri_type,
+    tfg.regulatory_interaction_id,
+    tf.TRANSCRIPTION_FACTOR_NAME  as TRANSCRIPTION_FACTOR_NAME,
+    con.FINAL_STATE as conformation_name,
+    tu.transcription_unit_id  as target_id,
+    tu.transcription_unit_name as target_name,
+    'tu' as target_type,
+     tfg.RI_FUNCTION,
+    LibraryUtilities.get_all_data_evidence_list(tfg.regulatory_interaction_id) as ri_evidences, 
+    tfg.SITE_ID,
+    LibraryUtilities.get_ecocyc_id(tfg.site_id)  as site_id_ecocyc,
+    tfg.CENTER_POSITION,
+    s.site_absolute_center_position,
+    LibraryUtilities.get_all_data_evidence_list(tfg.site_id) as site_evidences,
+    tfg.RI_DIST_FIRST_GENE,
+    null as POS_1,
+    null as PROMOTER_STRAND,
+    null as GENE_POSLEFT,
+    null as GENE_POSRIGHT,
+    null as relative_dist_to_promoter,
+    null as relative_dist_to_gene,
+    LibraryUtilities.get_first_gene_name_tu(tu.transcription_unit_id) as gene_name,
+    LibraryUtilities.Get_Syns_In_One_Row(LibraryUtilities.get_first_gene_tu(tu.transcription_unit_id), ', ') as gene_synonyms_list,
+    LibraryUtilities.Get_Syns_In_One_Row(tf.TRANSCRIPTION_FACTOR_id, ', ') as tf_synonyms_list,
+    LibraryUtilities.Get_Syns_In_One_Row(con.conformation_id, ' | ') as conformation_synonyms_list,
+    LibraryUtilities.get_all_data_evidence_list(tf.TRANSCRIPTION_FACTOR_id) as tf_evidences,
+    LibraryUtilities.get_all_data_evidence_list(con.conformation_id) as conformation_evidences
+from   TF_GENE_INTERACTION tfg, transcription_unit tu, conformation con, transcription_factor tf, site s
+where tfg.CONFORMATION_ID = con.CONFORMATION_ID
+and con.TRANSCRIPTION_FACTOR_ID = tf.TRANSCRIPTION_FACTOR_ID
+and tfg.object_id = tu.transcription_unit_id
+and tfg.site_id = s.site_id
+
+
+order by ri_type, TRANSCRIPTION_FACTOR_NAME, conformation_name, target_name
