@@ -1,4 +1,22 @@
--- RegulonDB Dataset for RIs [ tf-promoter, tf-tu, tf-gene ]
+--- 
+--- ## Query name:
+--- regulondb-dataset_ris.txt
+--- 
+--- ## Scheme Version:
+--- RegulonDB v10.10
+--- 
+--- ## Description:
+--- Regulatory interaction dataset including interactions for tf-promoter, tf-transcription units and rf-gene
+--- 
+--- ## Author:
+---     LuisJose 
+---     Reviewed by : Hely Salgado
+---
+--- ## Requested by:
+---     Paloma
+--- 
+--- ## Query Details
+
 -- ri:tf-promoter
 SELECT DISTINCT  
     'ri-tf-promoter'             AS RIType,
