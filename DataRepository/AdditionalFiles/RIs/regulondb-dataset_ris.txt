@@ -8,7 +8,7 @@ SELECT DISTINCT
     p.promoter_id                AS TargetID, 
     p.promoter_name              AS TargetName,
     'promoter'                   AS TargetType,
-    ri.ri_function               AS Funtion, 
+    ri.ri_function               AS Function, 
     LibraryUtilities.get_all_data_evidence_list(ri.regulatory_interaction_id) AS RIEvidences, 
     ri.site_id                   AS SiteID,
     LibraryUtilities.get_ecocyc_id(ri.site_id)  AS EcocycSiteID,
@@ -31,12 +31,12 @@ SELECT DISTINCT
 FROM  transcription_factor tf, 
       conformation cf, 
       regulatory_interaction ri, 
-      site s
+      site s,
       promoter p, 
       transcription_unit tu, 
       gene g
-WHERE ri.conformation_id = con.conformation_id
-      AND con.transcription_factor_id = tf.transcription_factor_id
+WHERE ri.conformation_id = cf.conformation_id
+      AND cf.transcription_factor_id = tf.transcription_factor_id
       AND ri.promoter_id = p.promoter_id
       AND p.promoter_id = tu.promoter_id
       AND ri.ri_first_gene_id = g.GENE_ID (+)
@@ -52,7 +52,7 @@ SELECT DISTINCT
     g.gene_id                    AS TargetID, 
     g.gene_name                  AS TargetName,
     'gene'                       AS TargetType,
-    tg.ri_function               AS Funtion, 
+    tg.ri_function               AS Function, 
     LibraryUtilities.get_all_data_evidence_list(tg.regulatory_interaction_id) AS RIEvidences, 
     tg.site_id                   AS SiteID,
     LibraryUtilities.get_ecocyc_id(tg.site_id)  AS EcocycSiteID,
@@ -93,7 +93,7 @@ SELECT DISTINCT
     tu.transcription_unit_id     AS TargetID, 
     tu.transcription_unit_name   AS TargetName,
     'tu'                         AS TargetType,
-    tg.ri_function               AS Funtion, 
+    tg.ri_function               AS Function, 
     LibraryUtilities.get_all_data_evidence_list(tg.regulatory_interaction_id) AS RIEvidences, 
     tg.site_id                   AS SiteID,
     LibraryUtilities.get_ecocyc_id(tg.site_id)  AS EcocycSiteID,
@@ -121,6 +121,6 @@ FROM tf_gene_interaction tg,
 WHERE tg.conformation_id = cf.conformation_id
     AND cf.transcription_factor_id = tf.transcription_factor_id
     AND tg.object_id = tu.transcription_unit_id
-    AND tg.site_id = s.site_id
+    AND tg.site_id = s.site_id(+)
 
-ORDER BY ri_type, transcription_factor_name, conformation_name, target_name
+ORDER BY RIType, TFName, ConformationName, TargetName
