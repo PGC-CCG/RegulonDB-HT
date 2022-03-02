@@ -16,6 +16,7 @@
 ---     Paloma
 --- 
 --- ## Query Details
+---    LibraryUtilities is a PLSQL API for Oracle DBMS
 
 -- ri:tf-promoter
 SELECT DISTINCT  
