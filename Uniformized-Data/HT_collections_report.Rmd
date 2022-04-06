@@ -1,0 +1,993 @@
+---
+title: 'HT collections of genomic features: TUs, TSSs, TTSs'
+author: "Claire Rioualen"
+date: "`r Sys.Date()`"
+output:
+  word_document:
+    toc: yes
+    toc_depth: '5'
+  html_document:
+    fig_caption: yes
+    highlight: zenburn
+    self_contained: yes
+    theme: cerulean
+    toc: yes
+    toc_depth: 5
+    toc_float: yes
+    number_sections: no
+    code_folding: hide
+  pdf_document:
+    toc: yes
+    toc_depth: '5'
+---
+<style type="text/css">
+body{ 
+  /* Normal  */ 
+  font-size: 14px; 
+}
+</style>
+
+
+```{r setup, include = FALSE}
+setwd("/Users/rioualen/Google Drive/Work/RegulonDB_HT_data_analysis/PAPER/Features")
+
+ht_collection_dir <- "ht-collections-v1.0"
+
+load(file = paste0("HT_collections.Rdata"))
+
+knitr::opts_chunk$set(echo = TRUE, include = TRUE, warning = FALSE, message = FALSE, cache = TRUE, eval = FALSE, results = 'asis', fig.width=12, fig.height=6, fig.align = 'center')
+```
+
+
+```{r libs-n-functions, eval = TRUE}
+#------------------
+library(DT)
+library(readxl)
+library(tidyverse)
+#------------------
+library(gridExtra)
+library(patchwork)
+library(ggpubr)
+
+## Local installation
+devtools::load_all("~/Desktop/Git/EcoliGenes")
+
+concat_uniq <- function(x, sep = ","){
+  paste0(unique(na.omit(x)), collapse = sep)
+}
+
+## wrapper function to remove commented rows from excel sheets
+read_excel_cm <- function(file, sheet, comment.char = "#"){
+  tab <- read_excel(file, sheet, col_names = F)
+  skip_rows <- grep(paste0("^", comment.char), unlist(c(tab[,1])))
+  if(length(skip_rows) > 0) tab <- read_excel(file, sheet, skip = max(skip_rows))
+  return(tab)
+}
+```
+
+# RegulonDB-HT collections
+
+> *In this work, we offer facilitated access to HT collections. Each collection comprises all of the curated datasets generated using a given technology, and resulting in a specific type of object. A dataset is conceived as a set of data and its metadata. Metadata gathers the properties that enable the identification of an experiment, such as growth conditions (culture medium, medium supplements, aeration, temperature, pH, agitation, growth phase, optical density),  genome version, features associated with the publications (author list, year of publication, PMID), as well as reported database identifiers, plus any additional pertinent information.*
+> (Tierrafría, Rioualen et al., submitted)
+
+In this report, I describe the generation of the collections of TUs, transcription start sites and termination sites HT datasets. 
+
+## Transcription units
+
+### Format 
+
+TUs are collected from a variety of sources and processed to produce uniform datasets in a bed-like format, with the following fields:
+
+* **chromosome:** NC_000913.3
+* **start:** Left genomic position
+* **stop:**  Right genomic position
+* **id:** Unique TU ID 
+* **length:** TU length
+* **strand:** TU strand reported by authors
+* **gene_number:** number of genes entirely contained in TU
+* **genes:** bnumbers of genes entirely contained in TU
+* **pseudo:** 1 if TU contains pseudo genes, else 0
+* **phantom:** 1 if TU contains phantom genes, else 0
+
+NB: Some of this information may differ from the originally published data. For example, we chose to report only the genes that are entirely contained in the TUs, while some authors chose to report all genes intersectting with the TU coordinates. When needed, gene names were actualized to the latest annotations available, and TU coordinates were actualized to the genome version NC_000913.3.
+
+### Metadata
+
+Each collection is thoroughly described in its corresponding metadata table, generated through curation of literature and database exploration.
+
+```{r read-metadata-tu}
+ht_tu_dir <- paste0(ht_collection_dir, "/collection_TU")
+
+## Read metadata table, filter out datasets that don't have a condition associated
+ht_tu_metadata <- read_excel(paste0(ht_tu_dir, "/DatasetCollection-TU-HT.xlsx"), sheet = 1, skip = 1) %>%
+  dplyr::rename(dataset_id = "Dataset ID",
+                pmid = "PMID",
+                author = "Authors",
+                condition = "Growth Conditions Experimental",
+                file = "Dataset File Name") %>%
+  dplyr::mutate(filepath = paste0(ht_tu_dir, "/author_files/", file)) %>%
+  dplyr::mutate(first_author = str_split(author, ",")[[1]][1]) %>%
+  dplyr::select(dataset_id, pmid, author, first_author, condition, file, filepath) %>%
+  dplyr::filter(!is.na(condition))
+
+## Make dataset list from table
+ht_tu_dataset_list <- setNames(split(ht_tu_metadata, seq(nrow(ht_tu_metadata))), ht_tu_metadata$dataset_id)
+```
+
+These are the TU datasets available:
+
+```{r display-metadata-tu, eval = TRUE}
+## Display datasets
+DT1 <- DT::datatable(ht_tu_metadata %>% dplyr::select(-filepath), options = list(dom = '', pageLength = 20, autoWidth = TRUE))
+DT1
+```
+
+### Datasets per author {.tabset}
+
+This part is customized depending on the originally published files. Since those files are formatted each in their own way, this part semi manual and should be modified carefully.
+
+It generates one table per dataset, with the following columns: start, stop, strand.
+
+#### Conway et al., 2014
+
+Reference article: [Conway et al., 2014](https://doi.org/10.1128/mbio.01442-14)
+
+Conditions:
+
+* Exponential phase
+
+Notes:
+
+* Genome coordinates were converted from version U00096.2 to version U00096.3 using the library [EcoliGenes](https://github.com/rioualen/EcoliGenes)
+
+```{r conway-tu-ht}
+TU0003 <- read_excel(ht_tu_dataset_list$TU0003$filepath, sheet = 1, skip = 1) %>%
+  dplyr::select(TU, STRAND) %>%
+  dplyr::rename(strand = STRAND) %>%
+  tidyr::separate(TU, c("left", "right"), sep = ":") %>%
+  dplyr::distinct() %>%
+  dplyr::mutate(left = as.numeric(gsub("^[A-Z]{1,2}-{1}", "", left)),
+                right = as.numeric(gsub("^[A-Z]{1,2}-{1}", "", right))) %>%
+  dplyr::mutate(start = EcoliGenes::convert_coords(left),
+                stop = EcoliGenes::convert_coords(right)) %>%
+  dplyr::select(start, stop, strand)
+```
+
+#### Ju et al., 2019
+
+Reference article: [Ju et al., 2019](https://doi.org/10.1038/s41564-019-0500-z)
+
+Conditions:
+
+* exponential phase
+* stationary phase
+
+```{r ju-tu-ht}
+TU0001 <- read_excel(ht_tu_dataset_list$TU0001$filepath, skip = 1) %>%
+  dplyr::rename(start = Boundary_of_transcript_unit...1, 
+                stop = Boundary_of_transcript_unit...2, 
+                strand = Direction_of_transcript_unit) %>%
+  dplyr::select(-Number_of_covered_annotated_genes, -Name_of_covered_Genes, -Length)
+
+TU0002 <- read_excel(ht_tu_dataset_list$TU0002$filepath, skip = 1) %>%
+    dplyr::rename(start = Boundary_of_transcript_unit...1, 
+                stop = Boundary_of_transcript_unit...2, 
+                strand = Direction_of_transcript_unit) %>%
+  dplyr::select(start, stop, strand)
+```
+
+#### Yan et al., 2018
+
+Reference article: [Yan et al., 2018](10.1038/s41467-018-05997-6)
+
+Conditions:
+
+* Rich (rich growth medium)
+* M9 (minimal growth medium)
+
+Notes:
+
+* Two types of TU termination are reported for each condition: detected TTS or longest read end. They are grouped in 2 files according to growth conditions
+
+```{r yan-tu-ht}
+TU0004 <- read_excel(ht_tu_dataset_list$TU0004$filepath, skip = 0) %>%
+    dplyr::rename(start = TU_left_position, 
+                stop = TU_right_position, 
+                strand = TU_strand) %>%
+  dplyr::select(start, stop, strand)
+
+TU0005 <- read_excel(ht_tu_dataset_list$TU0005$filepath, skip = 0) %>%
+    dplyr::rename(start = TU_left_position, 
+                stop = TU_right_position, 
+                strand = TU_strand) %>%
+  dplyr::select(start, stop, strand)
+```
+
+### Uniformization
+
+This part assumes that the specificities of each individual dataset were dealt with previously. What it does:
+
+* Generate unique IDs for TUs
+* Generate additional columns (TU length, TU genes, TU gene number, flag columns for pseudo genes and phantom genes)
+* Write one file per dataset
+
+Notes:
+
+* Only the genes that are entirely contained in the TUs are taken into account, regardless of what was reported by the authors in the original datasets.
+* The step that consists in getting bnumbers from genes that are contained in each TU is a little slow.
+
+```{r write-tu-files}
+## Write datasets to files
+tu_datasets_list <- list()
+for(ds_id in names(ht_tu_dataset_list)) {
+  df <- get(ds_id) %>%
+    dplyr::arrange(start) %>%
+    dplyr::mutate(id = paste0("TU_", ds_id, "_", dplyr::row_number()),
+                  chromosome = "NC_000913.3") %>%
+    dplyr::rowwise() %>%
+    dplyr::mutate(length = stop - start + 1,
+                  genes = EcoliGenes::what_genes(start, stop, strand)) %>%
+    tidyr::separate_rows(genes, sep = ",") %>%
+    dplyr::mutate(pseudo = EcoliGenes::is_pseudogene(genes),
+                  phantom = EcoliGenes::is_phantomgene(genes)) %>%
+    dplyr::group_by(id) %>%
+  	dplyr::summarise(across(where(is.character), concat_uniq),
+  	                 across(where(is.numeric), min),
+  	                 gene_number = ifelse(genes == "", 0, n())) %>%
+    dplyr::arrange(start) 
+
+  write.table(df %>% dplyr::select(chromosome, start, stop, id, length, strand, gene_number, genes, pseudo, phantom),
+              file = paste0(ht_tu_dir, "/uniform_files/", ds_id, ".tsv"),
+              sep = "\t", quote = F, col.names = T, row.names = F)
+  assign(ds_id, df)
+  tu_datasets_list[[ds_id]] <- df
+}
+```
+
+* Write a summary file for TU datasets
+
+```{r write-tu-table}
+ht_tu_stats <- ht_tu_metadata %>%
+  dplyr::rowwise() %>%
+  dplyr::mutate(tu_number = nrow(get(dataset_id))) %>%
+  dplyr::select(dataset_id, pmid, author, condition, tu_number)
+
+write.table(ht_tu_stats, file = paste0(ht_tu_dir, "/TU_datasets.tsv"), sep = "\t", quote = F, col.names = T, row.names = F)
+```
+
+### Results
+
+Summary of the TU datasets:
+
+```{r display-tu-table, eval = TRUE}
+DT2 <- DT::datatable(ht_tu_stats, options = list(dom = '', pageLength = 20)) %>% DT::formatRound('tu_number', digits=0)
+DT2
+```
+
+Number of TUs per dataset:
+
+```{r fig-stats-tu-1, eval = TRUE}
+ht_tu_stats_legends <- ht_tu_stats  %>%
+  dplyr::mutate(first_author = str_split(author, ",")[[1]][1])
+
+ggplot(ht_tu_stats_legends, aes(x = dataset_id, y = tu_number, fill = first_author)) +
+  geom_col(size = 2) +
+  theme(axis.text.x = element_text(angle = 45, hjust=1), text = element_text(size = 14)) +
+  ylab("Number of TUs") +
+  xlab("Dataset ID") +
+  labs(title = "Number of TUs per dataset") +
+  ggsci::scale_fill_jco()
+```
+
+## Transcription start sites (TSS)
+
+### Format 
+
+TSSs are collected from a variety of sources and processed to produce uniform bed-like dataset files with the following fields: 
+
+* **chromosome:** NC_000913.3
+* **start:** Left genomic position. If not reported, will be the same as `pos_1`
+* **stop:**  Right genomic position. If not reported, will be the same as `pos_1`
+* **id:** Unique TSS ID 
+* **pos_1:** TSS +1 position reported by authors
+* **strand:** TSS strand reported by authors
+
+### Metadata
+
+```{r read-metadata-tss}
+ht_tss_dir <- paste0(ht_collection_dir, "/collection_TSS")
+
+## Read metadata table
+ht_tss_metadata <- read_excel(paste0(ht_tss_dir, "/DatasetCollection-TSS-HT.xlsx"), sheet = 1, skip = 1) %>%
+  dplyr::rename(dataset_id = "Dataset ID",
+                pmid = "PMID",
+                author = "Authors",
+                condition = "Growth Conditions Experimental",
+                file = "Dataset File Name") %>%
+  dplyr::mutate(filepath = paste0(ht_tss_dir, "/author_files/", file)) %>%
+  dplyr::mutate(first_author = str_split(author, ",")[[1]][1]) %>%
+  dplyr::select(dataset_id, pmid, author, first_author, condition, file, filepath) 
+#dplyr::filter(!is.na(condition))
+  
+## Make list from table
+ht_tss_dataset_list <- setNames(split(ht_tss_metadata, seq(nrow(ht_tss_metadata))), ht_tss_metadata$dataset_id)
+```
+
+Datasets:
+
+```{r display-metadata-tss, eval = TRUE}
+## Display datasets
+DT3 <- DT::datatable(ht_tss_metadata %>% dplyr::select(-filepath, -author), options = list(dom = '', pageLength = 20, autoWidth = TRUE, columnDefs = list(list(width = '200px', targets = c(4)))))
+DT3
+```
+
+### Datasets per author {.tabset}
+
+#### Conway et al., 2014
+
+Reference article: [Conway et al., 2014](https://doi.org/10.1128/mbio.01442-14)
+
+Conditions: NA
+
+Notes:
+
+* Genome coordinates were converted from version U00096.2 to version U00096.3 using the library [EcoliGenes](https://github.com/rioualen/EcoliGenes).
+
+```{r ht-tss-conway}
+DS0006 <- read_excel(ht_tss_dataset_list$DS0006$filepath, sheet = 1, skip = 4) %>%
+  dplyr::mutate(pos_1 = gsub("^[PSIAS]{1,2}-", "", Promoter), strand = STRAND) %>%
+  dplyr::select(strand, pos_1) %>%
+  dplyr::distinct() %>%
+  dplyr::mutate(pos_1 = EcoliGenes::convert_coords(pos_1)) %>%
+  dplyr::mutate(start = pos_1, stop = pos_1) 
+
+```
+
+#### Ju et al., 2019
+
+Reference article: [Ju et al., 2019](https://doi.org/10.1038/s41564-019-0500-z)
+
+Conditions:
+
+* exponential phase
+* stationary phase
+
+```{r ht-tss-ju}
+DS0004 <- read_excel_cm(ht_tss_dataset_list$DS0004$filepath, sheet = 1) %>%
+  dplyr::rename(pos_1 = TSS_site, 
+                strand = TSS_direction) %>%
+  dplyr::mutate(start = pos_1, stop = pos_1) %>%
+  dplyr::select(start, stop, strand, pos_1) %>%
+  dplyr::distinct()
+
+DS0005 <- read_excel_cm(ht_tss_dataset_list$DS0005$filepath, sheet = 1) %>%
+  dplyr::rename(pos_1 = TSS_site, 
+                strand = TSS_direction) %>%
+  dplyr::mutate(start = pos_1, stop = pos_1) %>%
+  dplyr::select(start, stop, strand, pos_1) %>%
+  dplyr::distinct()
+```
+
+#### Mendoza-Vargas et al., 2009; Salgado et al., 2013
+
+Reference articles: 
+
+1. [Mendoza-Vargas et al., 2009](https://doi.org/10.1371/journal.pone.0007526)
+2. [Salgado et al., 2013](https://pubmed.ncbi.nlm.nih.gov/23203884/)
+
+
+Conditions/methodology:
+
+* 454 data (1)
+* RACE data (1)
+* 5 tri or monophosphate enrichment (1, 2)
+
+Notes:
+
+* Files were downloaded on 2021/03/19 [here](http://regulondb.ccg.unam.mx/highthroughputdatasetssearch?term=all)
+* Genome coordinates were converted from version U00096.2 to version U00096.3 using the library [EcoliGenes](https://github.com/rioualen/EcoliGenes) 
+* 3 datasets files formatted differently:
+  * One file has TSS left and right positions, as well as "max frequency" position.It also has "orientation" information.
+  * Two files have gene's left and right coordinates, and relative position of the TSS to the gene (unique position is calculated depending on strand). These files don't have relative orientation information
+
+
+```{r ht-tss-morett}
+#--------------------------------------------------------------------------------------
+DS0009 <- read_excel_cm(ht_tss_dataset_list$DS0009$filepath, sheet = 1, comment.char = "#") %>%
+  dplyr::rename(strand = Orientation, 
+                left = `TSS Absolute genome left position`, 
+                right = `TSS Absolute genome right position`, 
+               relative_pos = `Relative distance to gene`) %>%
+  dplyr::mutate(tss_pos = ifelse(strand == "forward", left + relative_pos, ifelse(strand == "reverse", right - relative_pos, NA))) %>%
+  dplyr::mutate(pos_1 = EcoliGenes::convert_coords(tss_pos)) %>%
+  dplyr::mutate(start = pos_1, 
+                stop = pos_1,
+                strand = ifelse(strand == "reverse", "-", ifelse(strand == "forward", "+", NA))) %>%
+  dplyr::select(start, stop, strand, pos_1) %>%
+  dplyr::distinct() 
+
+DS0010 <- read_excel_cm(ht_tss_dataset_list$DS0010$filepath, sheet = 1, comment.char = "#") %>%
+  dplyr::rename(strand = Orientation, 
+                left = `TSS Absolute genome left position`, 
+                right = `TSS Absolute genome right position`, 
+               relative_pos = `Relative orientation to gene`) %>%
+  dplyr::mutate(tss_pos = ifelse(strand == "forward", left + relative_pos, ifelse(strand == "reverse", right - relative_pos, NA))) %>%
+  dplyr::mutate(pos_1 = EcoliGenes::convert_coords(tss_pos)) %>%
+  dplyr::mutate(start = pos_1, 
+                stop = pos_1,
+                strand = ifelse(strand == "reverse", "-", ifelse(strand == "forward", "+", NA))) %>%
+  dplyr::select(start, stop, strand, pos_1) %>%
+  dplyr::distinct() 
+
+#--------------------------------------------------------------------------------------
+DS0011 <- read_excel_cm(ht_tss_dataset_list$DS0011$filepath, sheet = 1, comment.char = "#") %>%
+  dplyr::rename(strand = Orientation, 
+                left = `TSS Absolute genome left position`, 
+                right = `TSS Absolute genome right position`, 
+                tss_pos = `TSS Max Frequency`) %>%
+  dplyr::mutate(pos_1 = EcoliGenes::convert_coords(tss_pos)) %>%
+  dplyr::mutate(start = EcoliGenes::convert_coords(left)) %>%
+  dplyr::mutate(stop = EcoliGenes::convert_coords(right)) %>%
+  dplyr::mutate(strand = ifelse(strand == "reverse", "-", ifelse(strand == "forward", "+", NA))) %>%
+  dplyr::select(start, stop, strand, pos_1) %>%
+  dplyr::distinct() 
+```
+
+#### Cho et al., 2014
+
+Reference article: [Cho et al., 2014](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3923258/)
+
+Conditions:
+
+* Exponential phase (from [2012 paper](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3415461/)*)
+* Glutamine as source of nitrogen
+* Heat shock
+* Stationary phase
+
+Notes:
+
+* All TSSs come in the supplementary table 6 from the 2014 article, and are separated in 4 distinct datasets 
+* Genome coordinates were converted from version U00096.2 to version U00096.3 using the library [EcoliGenes](https://github.com/rioualen/EcoliGenes) 
+
+
+```{r pallson-ht-tss}
+##---------------------------------------------------------------------------------
+Palsson_all <- read_excel(ht_tss_dataset_list$DS0013$filepath, sheet = 1) %>%
+  dplyr::rename(strand = Strand, condition = Conditions, tss_pos = `TSS position`) %>%
+  dplyr::mutate(pos_1 = EcoliGenes::convert_coords(tss_pos)) %>%
+  tidyr::separate_rows(condition, sep = "") %>%
+  dplyr::mutate_all(dplyr::na_if,"") %>%
+  dplyr::filter(!is.na(condition)) %>%
+  dplyr::mutate(start = pos_1, stop = pos_1) %>%
+  dplyr::select(start, stop, strand, pos_1, condition) %>%
+  dplyr::distinct() 
+
+##---------------------------------------------------------------------------------
+DS0013 <- Palsson_all %>% dplyr::filter(condition == "E") %>% dplyr::select(-condition)
+
+DS0014 <- Palsson_all %>% dplyr::filter(condition == "G") %>% dplyr::select(-condition)
+
+DS0015 <- Palsson_all %>% dplyr::filter(condition == "H") %>% dplyr::select(-condition)
+
+DS0016 <- Palsson_all %>% dplyr::filter(condition == "S") %>% dplyr::select(-condition)
+```
+
+#### Thomason et al., 2014 
+
+Reference article: [Thomason et al., 2014](https://doi.org/10.1128/jb.02096-14)
+
+Conditions:
+
+* LB growth medium, OD = 2.0 (stationary phase)
+* Minimum growth medium, OD = 0.4 (exponential phase)
+* LB growth medium, OD = 0.4 (exponential phase)
+
+Notes:
+
+* Genome coordinates were converted from version U00096.2 to version U00096.3 using the library [EcoliGenes](https://github.com/rioualen/EcoliGenes) 
+
+```{r ht-tss-storz}
+DS0001 <- read_excel_cm(ht_tss_dataset_list$DS0001$filepath, sheet = 1, comment.char = "#") %>%
+  dplyr::filter(detected == 1) %>%
+  dplyr::select(Strand, Pos) %>%
+  dplyr::distinct() %>%
+  dplyr::mutate(pos_1 = EcoliGenes::convert_coords(Pos)) %>%
+  dplyr::mutate(start = pos_1, stop = pos_1, strand = Strand) %>%
+  dplyr::select(start, stop, strand, pos_1)
+
+DS0002 <- read_excel_cm(ht_tss_dataset_list$DS0002$filepath, sheet = 1, comment.char = "#") %>%
+  dplyr::filter(detected == 1) %>%
+  dplyr::select(Strand, Pos) %>%
+  dplyr::distinct() %>%
+  dplyr::mutate(pos_1 = EcoliGenes::convert_coords(Pos)) %>%
+  dplyr::mutate(start = pos_1, stop = pos_1, strand = Strand) %>%
+  dplyr::select(start, stop, strand, pos_1)
+
+DS0003 <- read_excel_cm(ht_tss_dataset_list$DS0003$filepath, sheet = 1, comment.char = "#") %>%
+  dplyr::filter(detected == 1) %>%
+  dplyr::select(Strand, Pos) %>%
+  dplyr::distinct() %>%
+  dplyr::mutate(pos_1 = EcoliGenes::convert_coords(Pos)) %>%
+  dplyr::mutate(start = pos_1, stop = pos_1, strand = Strand) %>%
+  dplyr::select(start, stop, strand, pos_1)
+```
+
+#### Wade lab
+
+Data not published, refer to [this article](https://doi.org/10.1007/978-1-62703-730-3_1) for details on experimental methods.
+
+Conditions:
+
+* M9 + 0.2% glycerol, cells grown with shaking at 30°C
+
+Notes:
+
+* TSSs queried from private database on 2021-09-21
+
+```{r wade-tss}
+DS0012 <- read_excel(ht_tss_dataset_list$DS0012$filepath, sheet = 1) %>%
+  dplyr::mutate(pos_1 = start) %>%
+  dplyr::select(start, stop, strand, pos_1) %>%
+  dplyr::distinct() 
+```
+
+#### Yan et al., 2018
+
+Reference paper: [Yan et al., 2018](10.1038/s41467-018-05997-6)
+
+Conditions:
+
+* M9 
+* Rich
+
+Notes:
+
+* HT-inferred TSSs from PacBio long read data
+
+```{r ht-tss-yan}
+DS0007 <- read_excel(ht_tss_dataset_list$DS0007$filepath, sheet = 1)  %>%
+    dplyr::rename(start = TSS_left_position, 
+                  stop = TSS_right_position, 
+                  pos_1 = TSS_site,
+                  strand = TSS_strand) %>%
+  dplyr::select(start, stop, strand, pos_1) %>%
+  dplyr::distinct()
+
+DS0008 <- read_excel(ht_tss_dataset_list$DS0008$filepath, sheet = 1)  %>%
+    dplyr::rename(start = TSS_left_position, 
+                  stop = TSS_right_position, 
+                  pos_1 = TSS_site,
+                  strand = TSS_strand) %>%
+  dplyr::select(start, stop, strand, pos_1) %>%
+  dplyr::distinct()
+```
+
+### Uniformization
+
+* Generate unique IDs for TSSs
+* Write one file per dataset
+
+```{r write-files}
+tss_datasets_list <- list()
+
+## Uniformize format, add TSS ID column, write file
+for(ds_id in names(ht_tss_dataset_list)) {
+  df <- get(ds_id) %>% ##### OJO con estos que no se actualizan ## ?
+    
+    dplyr::arrange(start) %>%
+    dplyr::mutate(id = paste0("TSS_", ds_id, "_", dplyr::row_number())) %>%
+    dplyr::mutate(chromosome = "NC_000913.3")
+
+  write.table(df %>% dplyr::select(chromosome, start, stop, id, pos_1, strand),
+              file = paste0(ht_tss_dir, "/uniform_files/", ds_id, ".tsv"),
+              sep = "\t", quote = F, col.names = T, row.names = F)
+  
+  tss_datasets_list[[ds_id]] <- df
+}
+
+```
+
+* Write a summary file for TSS datasets
+
+```{r write-tss-table}
+ht_tss_stats <- ht_tss_metadata %>%
+  dplyr::rowwise() %>%
+  dplyr::mutate(tss_number = nrow(get(dataset_id))) %>%
+  dplyr::select(dataset_id, pmid, author, condition, tss_number)
+
+write.table(ht_tss_stats, file = paste0(ht_tss_dir, "/TSS_datasets.tsv"), sep = "\t", quote = F, col.names = T, row.names = F)
+```
+
+### Results
+
+Summary of datasets
+
+```{r stats-tss, eval = TRUE}
+DT4 <- DT::datatable(ht_tss_stats, options = list(dom = '', pageLength = 20)) %>% DT::formatRound('tss_number', digits=0)
+DT4
+```
+
+
+Distribution
+
+```{r fig-stats-tss-1, eval = TRUE}
+ref <- c("Thomason et al., 2014", "Thomason et al., 2014", "Thomason et al., 2014", "Ju et al., 2019", "Ju et al., 2019", "Conway et al., 2014", "Yan et al., 2018", "Yan et al., 2018", "Mendoza-Vargas et al., 2009", "Mendoza-Vargas et al., 2009", "Salgado et al., 2013", "Wade group (not published)", "Cho et al., 2014", "Cho et al., 2014", "Cho et al., 2014", "Cho et al., 2014")
+
+ht_tss_stats <- ht_tss_stats  %>% cbind.data.frame(ref)
+
+
+ggplot(ht_tss_stats, aes(x = dataset_id, y = tss_number, fill = ref)) +
+  geom_col(size = 2) +
+  theme(axis.text.x = element_text(angle = 45, hjust=1), text = element_text(size = 12)) +
+  ylab("Number of TSSs") +
+  xlab("Dataset ID") +
+  labs(title = "Number of TSSs per dataset") +
+  ggsci::scale_fill_jco()
+```
+
+### Mapping with classic TSSs
+
+Reference set of classic TSSs:
+
+* PromoterSet release 10.9 from RegulonDB
+* TSSs that have only HT and/or prediction evidence are removed
+* Coords-less TSSs are removed
+* Only "Strong" and "Confirmed" evidence ones are kept
+
+```{r exp}
+## Get experimental promoters
+exp_all <- read.delim("~/Desktop/Data/RegulonDB/downloaded/PromoterSet_10.9.txt", comment.char = "#", header = F)
+colnames(exp_all) <- c("regulondb_id", "name", "strand", "pos_1", "sigma", "sequence", "evidence", "confidence")
+
+## Removing HT and predicted promoters from the "experimental" dataset
+evidence_to_remove <- c("[ICWHO|W|Inferred computationally without human oversight],[RS-EPT-CBR|S|RNA-seq using two enrichment strategies for primary transcripts and consistent biological replicates]",
+                        "[RS-EPT-CBR|S|RNA-seq using two enrichment strategies for primary transcripts and consistent biological replicates],[ICWHO|W|Inferred computationally without human oversight]",
+                        "[RS-EPT-CBR|S|RNA-seq using two enrichment strategies for primary transcripts and consistent biological replicates]",
+                        "[ICWHO|W|Inferred computationally without human oversight]")
+
+exp_filtered <- exp_all %>% 
+  dplyr::filter(!evidence %in% evidence_to_remove) %>%
+  dplyr::filter(confidence %in% c("Strong", "Confirmed")) %>%
+  dplyr::filter(! pos_1 ==  0) 
+
+## Formatting)
+exp_formatted <- exp_filtered %>% 
+  dplyr::rowwise() %>%
+  # mutate(cond = concat_uniq2(gsub(" ", "", sigma, fixed = TRUE))) %>%
+  # mutate(cond = ifelse(cond %in% c("", "unknown"), NA, cond)) %>%
+  dplyr::mutate(strand = ifelse(strand == "reverse", "-", ifelse(strand == "forward", "+",NA)),
+         start = ifelse(pos_1 == 0, NA, pos_1),
+         stop = ifelse(pos_1 == 0, NA, pos_1),
+         # condition = cond,
+         technology = "classic",
+         source = "RegulonDB",
+         orientation = NA) %>%
+  dplyr::arrange(start) %>%
+  dplyr::select(name, start, stop, strand, orientation, technology, source, regulondb_id) #condition
+
+reference_set <- as.data.frame(exp_formatted)
+```
+
+* Compare each HT dataset against RegulonDB classic TSSs and the reverse
+
+```{r tss-match-1-1, include = FALSE}
+## To do both directions
+tss_matching <- function(positions, strands, d = 5, ref = reference_set) {
+  check_match <- function(x, y, d) {
+			ref_strand <- ref %>% dplyr::filter(strand == y)
+			lo <- x >= ref$start - d
+			hi <- x <= ref$stop + d
+		check <- lo * hi
+		introw <- which(check == 1)
+		length(introw)
+	}
+	mapply(FUN = check_match, positions, strands, d)
+}
+
+classic_set <- reference_set %>%
+    dplyr::mutate(id = paste0("TSS_classic_", dplyr::row_number())) %>%
+    dplyr::mutate(dataset_id = paste0("TSS_classic")) %>%
+    dplyr::mutate(chromosome = "NC_000913.3") %>%
+    dplyr::mutate(pos_1 = start)
+
+matches <- data.frame(dataset_id = NULL, ht_in_classic = NULL, tss_classic_in_ht = NULL, classic_total = NULL)
+
+for(ds_id in names(tss_datasets_list)) {
+  df <- tss_datasets_list[[ds_id]] %>%
+    dplyr::arrange(start) %>%
+    dplyr::mutate(match_in_classic_set = tss_matching(pos_1, strand, d = 5)) 
+
+  classic_set <- classic_set %>%
+    dplyr::mutate(!!ds_id := tss_matching(start, strand, d = 5, ref = df)) 
+  
+  classic_match_ht <- nrow(classic_set %>% dplyr::filter(get(ds_id) != 0)  )
+
+  tss_total_set <- nrow(df)
+  tss_total_classic <- nrow(classic_set)
+
+  ht_match_classic <- nrow(df %>% dplyr::filter(match_in_classic_set != 0))
+
+  matches <- dplyr::bind_rows(matches, data.frame(dataset_id = ds_id, 
+                                           ht_in_classic = ht_match_classic, 
+                                           classic_in_ht = classic_match_ht, 
+                                           ht_total = tss_total_set,
+                                           classic_total = tss_total_classic ))
+  datasets_list[[ds_id]] <- df
+}
+ht_tss_mapping_bidirectional <- ht_tss_stats %>% 
+  dplyr::left_join(matches) %>% 
+  dplyr::mutate(no_ht_in_classic = ht_total - ht_in_classic,
+                no_classic_in_ht = classic_total - classic_in_ht,
+                rate_match_ht = ht_in_classic / ht_total,
+                rate_match_classic = classic_in_ht / classic_total,
+                rate_no_match_ht = no_ht_in_classic / ht_total,
+                rate_no_match_classic = no_classic_in_ht / classic_total) %>%
+  as.data.frame() 
+
+
+ write.table(ht_tss_mapping_bidirectional, file = paste0("TSS_mapping.tsv"), sep = "\t", quote = F, col.names = T, row.names = F)
+
+```
+
+* 3-panel paper-ready figure
+
+```{r fig-paper, include = FALSE}
+## panel 1. total tss per dataset
+panel1 <- ggplot(ht_tss_mapping_bidirectional, aes(x = dataset_id, y = tss_number, fill = ref)) +
+  geom_col(size = 2, width = 0.9) +
+  ylab("Number of TSSs") +
+  xlab("") +
+  labs(title = "A.",  fill = "Sources") +
+  ggsci::scale_fill_jco() +
+  theme(legend.position = "bottom", 
+        axis.title = element_blank(),
+        axis.text.x = element_blank(),
+        # plot.caption = element_text(hjust = 0, size = rel(0.95)), 
+        plot.margin = unit(c(0.2,0.2,0.2,0.5), "cm"),
+        text = element_text(size = 16),
+        plot.title = element_text(face = "bold")
+        ) 
+  # scale_x_discrete(position = "top") +
+  # guides(fill = guide_legend(title.position = "top", title.hjust = -0.02))
+
+## panel2. match in each dataset
+hist_data_2 <- ht_tss_mapping_bidirectional %>% pivot_longer(c(ht_in_classic, no_ht_in_classic))
+hist_data_2$name <- factor(hist_data_2$name, levels = c("no_ht_in_classic", "ht_in_classic"))
+  
+panel2 <- ggplot(hist_data_2, aes(x = dataset_id, y = value, fill = name)) +
+  geom_bar(stat = "identity", width = 0.9, color = "white", position="stack") +
+  theme(legend.position = "none", 
+        axis.title = element_blank(),
+        axis.text.x = element_blank(),
+        # plot.caption = element_text(hjust = 0, size = rel(0.95)), plot.margin = unit(c(0,0,0,0), "cm"),
+        text = element_text(size = 16),
+        plot.title = element_text(face = "bold")
+        ) +
+  scale_fill_manual(values = c("gray80", "darkgreen"), labels = c("no match", "1+ matches")) +
+  labs(title ="B.")
+
+## panel 3 classic TSS "recovered"
+hist_data <- ht_tss_mapping_bidirectional %>% pivot_longer(c(classic_in_ht, no_classic_in_ht))
+hist_data$name <- factor(hist_data$name, levels = c("no_classic_in_ht", "classic_in_ht"))
+  
+panel3 <- ggplot(hist_data, aes(x = dataset_id, y = value, fill = name)) +
+  geom_bar(stat = "identity", width = 0.9, color = "white", position="stack") +
+  theme(legend.position = "none", 
+        axis.title = element_blank(),
+        axis.text.x = element_text(angle = 45, hjust=1),
+        # plot.caption = element_text(hjust = 0, size = rel(0.95)), plot.margin = unit(c(0,0,0,0), "cm"),
+        plot.title = element_text(face = "bold"),
+        text = element_text(size = 16)
+        ) +
+  scale_fill_manual(values = c("gray80", "darkgreen"), labels = c("no match", "1+ matches")) +
+  labs(title ="C.") +
+  xlab("Dataset ID") 
+
+## axis labels tweaking
+# ylab <- panel1$labels$y
+# panel1$labels$y <- " "
+ 
+## group panels and set relative height for each one
+# panel1 / panel2 / panel3 +  plot_layout(heights = c(8, 8, 4))
+
+## Make legend shared with all of the panels to place it at the bottom
+ggarrange(panel1, panel2, panel3, ncol=1, nrow=3, common.legend = TRUE, legend="bottom") %>%
+annotate_figure(left = textGrob("Number of transcription start sites", rot = 90, vjust = 1, gp = gpar(cex = 1.3, fontsize = 16)), 
+                bottom = textGrob("Dataset ID", gp = gpar(cex = 1.3, fontsize = 16)))
+
+
+```
+
+
+## Transcription termination sites (TTS)
+
+### Format 
+
+TTSs are collected from a variety of sources and processed to produce uniform bed-like dataset files with the following fields: 
+
+* **chromosome:** NC_000913.3
+* **start:** Left genomic position. If not reported, will be the same as `term_pos`
+* **stop:**  Right genomic position. If not reported, will be the same as `term_pos`
+* **id:** Unique TSS ID 
+* **term_pos:** Terminal position reported by authors
+* **strand:** TTS strand reported by authors
+
+### Metadata
+
+```{r read-metadata-tts}
+ht_tts_dir <- paste0(ht_collection_dir, "/collection_TTS")
+
+## Read metadata table, filter out datasets that don't have a condition associated
+ht_tts_metadata <- read_excel(paste0(ht_tts_dir, "/DatasetCollection-TTS-HT.xlsx"), sheet = 1, skip = 1) %>%
+  dplyr::rename(dataset_id = "Dataset ID",
+                pmid = "PMID",
+                author = "Authors",
+                condition = "Growth Conditions Experimental",
+                file = "Dataset File Name") %>%
+  dplyr::mutate(filepath = paste0(ht_tts_dir, "/author_files/", file)) %>%
+  dplyr::mutate(first_author = str_split(author, ",")[[1]][1]) %>%
+  dplyr::select(dataset_id, pmid, author, first_author, condition, file, filepath) %>%
+  dplyr::filter(!is.na(condition))
+
+## Make dataset list from table
+ht_tts_dataset_list <- setNames(split(ht_tts_metadata, seq(nrow(ht_tts_metadata))), ht_tts_metadata$dataset_id)
+```
+
+```{r display-metadata-tts, eval = TRUE}
+## Display datasets
+DT5 <- DT::datatable(ht_tts_metadata %>% dplyr::select(-filepath, -author), options = list(dom = '', pageLength = 20, autoWidth = TRUE, columnDefs = list(list(width = '200px', targets = c(4)))))
+DT5
+```
+
+### Datasets per author {.tabset}
+
+This part is customized depending on the originally published files. Since those files are formatted each in their own way, this part is partly manual and should be modified carefully.
+
+#### Conway et al., 2014
+
+Reference article: [Conway et al., 2014](https://doi.org/10.1128/mbio.01442-14)
+
+Conditions:
+
+* Exponential phase
+
+Notes:
+
+* Genome coordinates were converted from version U00096.2 to version U00096.3 using the library [EcoliGenes](https://github.com/rioualen/EcoliGenes) 
+
+```{r ht-term-conway}
+TR0003 <- read_excel_cm(ht_tts_dataset_list$TR0003$filepath, sheet = 1, comment.char = "#") %>%
+  dplyr::mutate(term_pos = gsub("^[T]{1,2}-", "", Term), strand = Strand) %>%
+  dplyr::select(strand, term_pos) %>%
+  dplyr::distinct() %>%
+  dplyr::mutate(term_pos = EcoliGenes::convert_coords(term_pos)) %>%
+  dplyr::mutate(start = term_pos, stop = term_pos) %>%
+  dplyr::select(start, stop, strand, term_pos) 
+```
+
+
+#### Ju et al, 2019
+
+Reference article: [Ju et al., 2019](https://doi.org/10.1038/s41564-019-0500-z)
+
+Conditions:
+
+* exponential phase
+* stationary phase
+
+
+```{r ht-term-ju}
+TR0001 <- read_excel_cm(ht_tts_dataset_list$TR0001$filepath, sheet = 1, comment.char = "#") %>%
+  dplyr::rename(term_pos = TTS_position,
+                strand = TTS_strand) %>% 
+  dplyr::mutate(start = term_pos, 
+                stop = term_pos) %>%
+  dplyr::select(start, stop, strand, term_pos) %>%
+  dplyr::distinct()
+
+TR0002 <- read_excel_cm(ht_tts_dataset_list$TR0002$filepath, sheet = 1, comment.char = "#") %>%
+  dplyr::rename(term_pos = TTS_position,
+                strand = TTS_strand) %>% 
+  dplyr::mutate(start = term_pos, 
+                stop = term_pos) %>%
+  dplyr::select(start, stop, strand, term_pos) %>%
+  dplyr::distinct()
+```
+
+
+
+#### Yan et al., 2018
+
+Reference article: [Yan et al., 2018](10.1038/s41467-018-05997-6)
+
+Conditions:
+
+* M9 (minimal growth medium)
+* Rich (rich growth medium)
+
+Notes:
+
+* Two types of TU termination are reported for each condition: detected TTS or longest read end. The latter was not included.
+
+```{r yan-term-ht}
+TR0004 <- read_excel(ht_tts_dataset_list$TR0004$filepath, skip = 0) %>%
+  dplyr::mutate(strand = TU_strand, 
+                term_pos = ifelse(strand == "-", TU_left_position, TU_right_position),
+                start = term_pos,
+                stop = term_pos) %>%
+  dplyr::select(start, stop, strand, term_pos) %>%
+  dplyr::distinct()
+
+
+TR0005 <- read_excel(ht_tts_dataset_list$TR0005$filepath, skip = 0) %>%
+  dplyr::mutate(strand = TU_strand, 
+                term_pos = ifelse(strand == "-", TU_left_position, TU_right_position),
+                start = term_pos,
+                stop = term_pos) %>%
+  dplyr::select(start, stop, strand, term_pos) %>%
+  dplyr::distinct()
+
+```
+
+### Uniformization
+
+This part assumes that the specificities of each individual dataset were dealt with previously. It generates unique IDs for terminators and writes one file per dataset.
+
+```{r write-tts-files}
+tts_datasets_list <- list()
+
+for(ds_id in names(ht_term_dataset_list)) {
+  df <- get(ds_id) %>%
+    dplyr::mutate(id = paste0("TTS_", ds_id, "_", dplyr::row_number()),
+                  start = term_pos,
+                  stop = term_pos,
+                  chromosome = "NC_000913.3") %>%
+    dplyr::arrange(start)
+
+  write.table(df %>% dplyr::select(chromosome, start, stop, id, term_pos, strand), file = paste0(ht_tts_dir, "/uniform_files/", ds_id, ".tsv"), sep = "\t", quote = F, col.names = T, row.names = F)
+  
+  assign(ds_id, df)
+  tts_datasets_list[[ds_id]] <- df
+}
+```
+
+* Write a summary file for TTS datasets
+
+```{r write-tts-table}
+ht_tts_stats <- ht_tts_metadata %>%
+  dplyr::rowwise() %>%
+  dplyr::mutate(term_number = nrow(get(dataset_id))) %>%
+  dplyr::select(dataset_id, pmid, author, condition, term_number)
+
+write.table(ht_tts_stats, file = paste0(ht_tts_dir, "/TTS_datasets.tsv"), sep = "\t", quote = F, col.names = T, row.names = F)
+```
+
+### Results
+
+Summary of datasets:
+
+
+```{r stats-term, eval = TRUE}
+DT6 <- DT::datatable(ht_tts_stats, options = list(dom = '', pageLength = 20)) %>% DT::formatRound('term_number', digits=0)
+DT6
+```
+
+Distribution
+
+```{r fig-stats-tts-1, eval = TRUE}
+ht_tts_stats_legends <- ht_tts_stats  %>%
+  dplyr::mutate(first_author = str_split(author, ",")[[1]][1])
+
+ ggplot(ht_tts_stats_legends, aes(x = dataset_id, y = term_number, fill = first_author)) +
+  geom_col(size = 2) +
+  theme(axis.text.x = element_text(angle = 45, hjust=1), text = element_text(size = 12)) +
+  ylab("Number of TSSs") +
+  xlab("Dataset ID") +
+  labs(title = "Number of TTSs per dataset") +
+  ggsci::scale_fill_jco()
+```
+
+
+```{r save-session}
+save.image(file = paste0("HT_collections.Rdata"))
+```
